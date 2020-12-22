@@ -1,1 +1,10 @@
-# YahooBidCertificateCrawler
+# 拔拔肉😋
+
+## TODO
++ 例外處理
+  - 網路例外
+    + 單個商品(錯誤標記)
+    + 整頁查詢(進度紀錄)
++ 紀錄log檔，續載資料。
++ Qt介面
++ 匯出Excel
