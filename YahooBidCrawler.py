@@ -5,6 +5,8 @@ import html
 import re
 import threading
 import time
+import csv
+import codecs
 from bs4 import BeautifulSoup
 from progressbar import *
 
@@ -14,7 +16,8 @@ headers = {"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,imag
            "cookie": "B=6nsn78lftuen3&b=3&s=30; GUC=AQEBAQFf4Ixf6UIgjQS2; A1=d=AQABBOM6318CEBQ31jgbkmTu8dW12kXn8msFEgEBAQGM4F_pXwAAAAAA_SMAAAcI4zrfX0Xn8ms&S=AQAAAmpoypHsZ1ID0nudwmV4xeU; A3=d=AQABBOM6318CEBQ31jgbkmTu8dW12kXn8msFEgEBAQGM4F_pXwAAAAAA_SMAAAcI4zrfX0Xn8ms&S=AQAAAmpoypHsZ1ID0nudwmV4xeU; A1S=d=AQABBOM6318CEBQ31jgbkmTu8dW12kXn8msFEgEBAQGM4F_pXwAAAAAA_SMAAAcI4zrfX0Xn8ms&S=AQAAAmpoypHsZ1ID0nudwmV4xeU&j=WORLD; hp_site_ad_closed_time=d=CAZPu3Ec0oNm933zO9pZz0BTHDLtwd6PJ_lyeu24VNPi5HZgaStmdiRDvZSFDaSKaN4yq8OJ1og2UnSwi5VflSgKNsK5&v=1",
            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"}
 datetime_str = datetime.datetime.today().strftime("%Y-%m-%d %H%M")  # 獲得格式化之當地時間
-fileName = "認證查詢 " + datetime_str + ".txt"
+fileName = ""
+fieldnames = ["商品名稱", "商品網址", "賣家名稱", "賣家ID", "認證"]
 
 
 def getProductsLinks(keyword, page):
@@ -22,7 +25,7 @@ def getProductsLinks(keyword, page):
     yparams = {"p": keyword, "pg": page}
     result = requests.get(url, params=yparams, headers=headers)
     # 把網頁丟進BS4
-    soup = BeautifulSoup(html.unescape(result.text), 'html.parser')
+    soup = BeautifulSoup(html.unescape(result.text), "html.parser")
     links = soup.find_all("a")
     plinks = set()  # productsLinks
     for l in links:
@@ -33,28 +36,37 @@ def getProductsLinks(keyword, page):
 
 def saveItemInfo(link):
     result = requests.get(link)
-    soup = BeautifulSoup(html.unescape(result.text), 'html.parser')
+    soup = BeautifulSoup(html.unescape(result.text), "html.parser")
     productName = soup.find("h1")
-    NCCCertificate = soup.find("div", class_=re.compile("^specValue"))
-    file = open(os.path.join(os.getcwd(), fileName),
-                "a+", encoding="utf-8")
-    file.write(productName.get_text() + "  "+link+"  " if productName !=
-               None else "商品名稱抓取錯誤" + "  "+link+"  ")
-    if NCCCertificate != None:
-        file.write(NCCCertificate.get_text()+'\n')
-    else:
+    sellerName = soup.find("div", class_=re.compile("^sellerNameBox"))
+    sellerId = soup.find("div", class_=re.compile(
+        "^moreProfileBox")).find("span")
+    NCCC = soup.find("div", class_=re.compile("^specValue"))
+    # NCC Certificate
+    if not NCCC:
         match = re.search(r"CCA[A-Z]{1}[A-Z0-9]{9,10}", soup.get_text())
-        # NCCCertificate = soup.find(text=re.compile(
-        #     "[\s\S]*CCA[A-Z]{1}[A-Z0-9]{9,10}[\s\S]*"))
-        file.write("商家未設定，可能是：" + match.group() +
-                   "\n" if match else "illegal!\n")
-    file.close()
+        certificateId = "商家未設定，可能是：" + match.group() if match else "未標明"
+    else:
+        certificateId = NCCC.get_text()
+    dataDict = {"商品名稱": "商品名稱抓取錯誤" if not productName else productName.get_text(),
+                "商品網址": link,
+                "賣家名稱": sellerName.get_text(),
+                "賣家ID": sellerId.get_text(),
+                "認證": certificateId}
+
+    with open(os.path.join(os.getcwd(), fileName),
+              "a+", newline="", encoding="utf-8-sig") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writerow(dataDict)
 
 
 def main():
+    global fileName
     keyword = input("輸入要查詢的商品：")
-    with open(os.path.join(os.getcwd(), fileName), "w", encoding="utf-8") as file:
-        file.write(datetime_str + "\t" + "關鍵字：" + keyword + "\n")
+    fileName = "關鍵字：" + keyword + " " + datetime_str + ".csv"
+    with open(os.path.join(os.getcwd(), fileName), "w", newline="", encoding="utf-8-sig") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
     pageCount = 1
     while(True):
         print("正在抓取第", pageCount,
@@ -81,6 +93,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# result = requests.get(
-#     "https://tw.bid.yahoo.com/search/auction/product?p=%E8%97%8D%E8%8A%BD", headers=headers)
-# print(result.text)
